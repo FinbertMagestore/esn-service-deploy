@@ -1,4 +1,5 @@
 let User = require('../models/user');
+let Groups = require('../models/group');
 let GroupController = require('../controllers/group');
 let Files = require('../models/fileitem');
 let Utils = require('../application/utils');
@@ -92,6 +93,20 @@ async function findUser(req, isFindWithPhoneAndEmail = true) {
         }
     }
     return null;
+}
+
+async function postUsers(req, res, next) {
+    try {
+
+        return next();
+    } catch (error) {
+    return res.status(500).send({
+        code: 500,
+        message: 'Server Error',
+        data: null,
+        error: error.message
+    });
+}
 }
 
 async function updateUserInfo(req, user, isCheckValidInput = true) {
@@ -218,6 +233,7 @@ async function putUser(req, res, next) {
         }
         user = await user.save();
         req.users.user_request = user;
+        //TODO: update reference to this user.
         return next();
     } catch (error) {
         return res.status(500).send({
@@ -250,6 +266,7 @@ async function deleteUser(req, res, next) {
             user = await user.save();
             req.users.user_request = user;
         }
+        //TODO remove all request, member of this user.
         return next();
     } catch (error) {
         return res.status(500).send({
@@ -430,13 +447,20 @@ async function removeFriend(req, res) {
         });
     }
 }
-function getClasss(req, res) {
+async function getClasss(req, res) {
     try {
         let user = req.users.user_request;
+        let groups = await Groups.find({_id: {$in: user.getClasssID()}});
+        let datas = groups.map(group => ({
+            id: group._id,
+            profileImageID: group.profileImageID,
+            name: group.name,
+        }));
         return res.send({
             code: 200,
             message: '',
-            data: user.getClasss()
+            length: datas.length,
+            data: datas,//user.getClasss()
         })
     } catch (error) {
         return res.status(500).send({
@@ -495,7 +519,7 @@ async function addClassRequest(req, res) {
     try {
         let user = req.users.user_request;
         let group = req.groups.group_request;
-        if (user.addClassRequest(group)) {
+        if (user.addClassRequest(group, true)) {
             group = await group.save();
             user = await user.save();
             req.users.user_request = user;
@@ -524,15 +548,11 @@ async function removeClassRequest(req, res) {
     try {
         let user = req.users.user_request;
         let group = req.groups.group_request;
-        if (user.removeClassRequest(group)) {
-            if (group.removeRequested(user)) {
-                group = await group.save();
-                user = await user.save();
-                req.users.user_request = user;
-                req.groups.group_request = group;
-            } else {
-                throw new Error();
-            }
+        if (user.removeClassRequest(group, true)) {
+            group = await group.save();
+            user = await user.save();
+            req.users.user_request = user;
+            req.groups.group_request = group;
         } else {
             throw new Error();
         }
@@ -844,7 +864,7 @@ async function getFiles(req, res, next) {
             isDeleted: false,
             'user.id': user._id,
         });
-        let datas = files.map(file => file.getBasicInfo());
+        req.fileitems.files_saved = files;
         return next();
     } catch (error) {
         return res.status(500).json({
@@ -873,27 +893,13 @@ async function searchUserByName(req, res) {
 
 async function getPosts(req, res) {
     try {
-        let userID = Number(req.params.userID);
-        if (!userID) {
-            return res.status(400).json({
-                code: 400,
-                message: 'userID invalid',
-                data: null
-            });
-        }
-        let datas = (await Posts.find({
-            isDeleted: false,
-            'userCreate.id': userID,
-        })).map(post => post.getBasicInfo());
-        //     .map(post => ({
-        //     id: post._id,
-        //     title: post.title,
-        //     content: post.content,
-        //     timeCreate: Utils.exportDate(post.timeCreate),
-        //     countComments: post.countComments,
-        //     countLikes: post.countLikes,
-        //     files: post.getFiles(),
-        // }));
+        let user = req.users.user_request;
+        let groups = await Groups.find({posts:{$elemMatch:{isDeleted: false, "options.members":{$elemMatch:{$eq: user._id}}}}});
+        let postIDs = groups.reduce((postIDs, group) => {
+            return postIDs.concat(group.getPostIDForUsers(user))
+        },[]);
+        let posts = await Posts.find({_id: {$in : postIDs}});
+        let datas = posts.map(post => post.getBasicInfo());
         return res.send({
             code: 200,
             message: 'Success',
@@ -959,3 +965,4 @@ exports.getFiles = getFiles;
 exports.searchUserByName = searchUserByName;
 exports.getPosts = getPosts;
 exports.getManyUsers = getManyUsers;
+exports.postUsers = postUsers;

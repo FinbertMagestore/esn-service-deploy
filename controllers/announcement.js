@@ -130,6 +130,7 @@ async function addAnnouncement(req, res, next) {
             _id: now.getTime(),
             title: title,
             content: content,
+            timeCreate: now,
         });
         announcement.userCreate = {
             id: user._id,
@@ -137,6 +138,7 @@ async function addAnnouncement(req, res, next) {
             lastName: user.lastName,
             profileImageID: user.profileImageID,
             timeUpdate: now,
+            timeCreate: now,
         };
         announcement = await announcement.save();
         req.announcements.announcement_requested = announcement;

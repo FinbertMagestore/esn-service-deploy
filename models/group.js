@@ -248,7 +248,7 @@ function isAdmin(user) {
     return TypeMemberEnum[member.typemember] === 'Admin';
 }
 function getNewID() {
-    return new Date().getTime();
+    return Date.now();
 }
 function addUserInArray(new_user, arrays) {
     if (!new_user) {
@@ -300,15 +300,20 @@ function removeUserFromArray(remove_user, arrays) {
 function addRequested(user) {//TODO: check member exited.
     return addUserInArray(user, this.requesteds) ? user : null;
 }
-function removeRequested(user) {
-    return removeUserFromArray(user, this.requesteds) ? user : null;
-}
-function confirmRequested(user) {
-    if (addMember.call(this, user)) {
-        removeRequested.call(this, user);
+function removeRequested(user, isUpdateReference = false) {
+    if (!removeUserFromArray(user, this.requesteds)) {
+        return null;
+    }
+    if (!isUpdateReference) {
         return user;
     }
-    return null;
+    return user.removeClassRequest.call(user, this, false) ? user : null;
+}
+function confirmRequested(user, isUpdateReference = false) {
+    if (!addMember.call(this, user)) {
+        return null;
+    }
+    return removeRequested.call(this, user, isUpdateReference) ? user : null;
 }
 
 function addMember(user, typemember = 1) {//TODO: check owner.
@@ -432,6 +437,10 @@ function addPost(new_post, topic_name, new_options = null) {
         let startTime = scheduleOptions ? scheduleOptions.startTime ? scheduleOptions.startTime : null : null;
         let endTime = scheduleOptions ? scheduleOptions.endTime ? scheduleOptions.endTime : null : null;
         let users = new_options.members ? new_options.members : [];
+
+        users = users.filter(member_id => {
+            return !!this.members.find(member => member._id === member_id);
+        });
         options = {
             isShow: isShow,
             isSchedule: isSchedule,
@@ -466,22 +475,46 @@ function addPost(new_post, topic_name, new_options = null) {
 }
 function getPostIDs(user, topics = null, top = -1) {
     if (!this.posts) { return []; }
-    if (!user) {
-        return this.posts.filter(post => post.isDeleted === false).map(post => post._id);
+    return this.posts.filter(post => post.isDeleted === false).map(post => post._id);
+}
+function getPostIDForUsers(user, topics = null, top = -1) {
+    if (!this.posts) { return []; }
+    let publicPostIDs = getPublicScopePostID.call(this);
+    if (!user || !isMember.call(this, user)) {
+        return publicPostIDs;
     }
-    if (!isMember.call(this, user)) {
-        return [];
+    let protectedPostID = getProtectedScopePostID.call(this);
+    let privatePostID = getPrivateScopePostID.call(this, user);
+    return publicPostIDs.concat(protectedPostID).concat(privatePostID);
+}
+function getPublicScopePostID() {
+    if (!this.posts) return [];
+    return this.posts.filter(post => {
+        if (post.isDeleted || !post.options) return false;
+        return post.options.scopeType === 0;
+    }).map(post => post._id);
+}
+function getProtectedScopePostID() {
+    if (!this.posts) return [];
+    return this.posts.filter(post => {
+        if (post.isDeleted || !post.options) return false;
+        return post.options.scopeType === 10;
+    }).map(post => post._id);
+}
+
+function getPrivateScopePostID(user) {
+    if (!user) return [];
+    if (!this.posts) return [];
+    if (isAdmin.call(this, user)) {
+        return this.posts.filter(post => {
+            if (post.isDeleted || !post.options || post.options.scopeType !== 100 || !post.options.members) return false;
+            return true;
+        }).map(post => post._id);
     }
-    let postIDs = [];
-    let max = top > 0 ? this.posts.length : top;
-    let count = 0;
-    for (let index = this.posts.length - 1; index >= 0; index--) {
-        let post = this.posts[index];
-        if (count === max) break;
-        postIDs.push(post._id);
-        count++;
-    }
-    return postIDs;
+    return this.posts.filter(post => {
+        if (post.isDeleted || !post.options || post.options.scopeType !== 100 || !post.options.members) return false;
+        return !!post.options.members.find(member => member === user._id);
+    }).map(post => post._id);
 }
 
 function getRequesteds() {
@@ -489,7 +522,7 @@ function getRequesteds() {
     this.requesteds.forEach(requested => {
         if (!requested.isRemoved) {
             requesteds.push({
-                _id: requested._id,
+                id: requested._id,
                 firstName: requested.firstName,
                 lastName: requested.lastName,
                 profileImageID: requested.profileImageID,
@@ -536,6 +569,11 @@ GroupSchema.methods.removeTopic = removeTopic;
 GroupSchema.methods.getTopics = getTopics;
 GroupSchema.methods.addPost = addPost;
 GroupSchema.methods.getPostIDs = getPostIDs;
+GroupSchema.methods.getPostIDForUsers = getPostIDForUsers;
 GroupSchema.methods.getRequesteds = getRequesteds;
+
+GroupSchema.methods.getProtectedScopePostID = getProtectedScopePostID;
+GroupSchema.methods.getPrivateScopePostID = getPrivateScopePostID;
+GroupSchema.methods.getPublicScopePostID = getPublicScopePostID;
 
 module.exports = mongoose.model('Group', GroupSchema); 
