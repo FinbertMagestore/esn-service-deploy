@@ -63,7 +63,8 @@ async function getEventsInfo(req, res) {
     return res.json({
         code: 200,
         message: 'Success',
-        data: events.map(event => event.getBasicInfo()),
+        length: events ? events.length : 0,
+        data: events ? events.map(event => event.getBasicInfo()) : [],
     });
 }
 async function getEventInfo(req, res) {
@@ -205,8 +206,7 @@ async function addEvent(req, res, next) {
         let content = req.body.content;
         let eventImageID = req.fileitems.file_selected_id ? String(req.fileitems.file_selected_id) : null;
         let location = req.body.location ? req.body.location : '';
-        let context = req.body.context ? req.body.context : 100;//system_context
-        // let contextID = req.body.contextID ? req.body.contextID : null;
+        let context = req.body.context ? Number(req.body.context) : 100;
         let isAllDay = req.body.isAllDay ? req.body.isAllDay === 'true' : false;
         let startTime = req.body.startTime ? Utils.parseDate(req.body.startTime) : null;
         let endTime = req.body.endTime ? Utils.parseDate(req.body.endTime) : null;
@@ -288,7 +288,7 @@ async function addEvents(req, res, next) {
         let content = req.body.content;
         let eventImageID = req.fileitems.file_selected_id ? String(req.fileitems.file_selected_id) : null;
         let location = req.body.location ? req.body.location : '';
-        let context = req.body.context ? req.body.context : 100;
+        let context = req.body.context ? Number(req.body.context) : 100;
         let isAllDay = req.body.isAllDay ? req.body.isAllDay === 'true' : false;
         let periods = Utils.getPeriodArray(req.body.periods);
         let groupEventID = null;
