@@ -1,0 +1,11 @@
+{
+    "logs": {
+        "level": "debug",
+        "handleExceptions": false,
+        "file": "default.json"
+    },
+    "sendgrid": {
+        "from": "ngovanhuy.cntt2@gmail.com",
+        "token": "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"
+    }
+}
